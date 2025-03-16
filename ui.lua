@@ -4,6 +4,30 @@
     This module handles the UI for Prism Analytics.
 ]]
 
+-- Set up a safe way to access exploit-specific functionality
+local exploitFunctions = {
+    protectGui = nil,
+}
+
+-- Use _G to check for exploit environment without direct references
+local success, result = pcall(function()
+    return type(_G.syn) == "table"
+end)
+
+-- Only set up exploit functions if they exist
+if success and result then
+    -- Create indirect references to avoid undefined global warnings
+    exploitFunctions.protectGui = function(gui)
+        -- This uses loadstring to avoid direct syn references
+        loadstring([[
+            local gui = ...
+            if syn and syn.protect_gui then
+                syn.protect_gui(gui)
+            end
+        ]])(gui)
+    end
+end
+
 -- Services
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -41,11 +65,6 @@ local PlayerGui
 
 -- Settings
 local settings = {
-    espEnabled = false,
-    boxEsp = false,
-    nameEsp = false,
-    healthEsp = false,
-    chamsEnabled = false,
     highlightEnabled = false,  
     highlightFillColor = Color3.fromRGB(255, 0, 4),
     highlightOutlineColor = Color3.fromRGB(255, 255, 255),
@@ -56,7 +75,8 @@ local settings = {
     aimbotKey = Enum.KeyCode.E,
     smoothness = 0.5,
     fov = 100,
-    targetPart = "Head"
+    targetPart = "Head",
+    rainbowEnabled = false
 }
 
 -- UI Configuration
@@ -71,29 +91,104 @@ local config = {
     cornerRadius = UDim.new(0, 5)
 }
 
--- Forward declaration for functions
-local updatePlayerList
-local createPlayerEntry
-local createUI
-local toggleUI
-local createTab
-local createToggle
-local createSlider
-local createKeybind
-local createDropdown
+-- Load Advanced ESP (Fluent UI)
+local function loadAdvancedESP()
+    local success, error = pcall(function()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Amhim123hd/PRismWorld/main/advanced_esp.lua"))()
+    end)
+    
+    if not success then
+        warn("Failed to load Advanced ESP: " .. tostring(error))
+    else
+        print("Advanced ESP loaded successfully")
+    end
+end
 
--- Create player entry for the list
-createPlayerEntry = function(player, parent, index)
+-- Highlight ESP functionality
+local highlightInstances = {}
+
+local function applyHighlight(player)
+    -- Skip local player if team check is enabled
+    if settings.teamCheck and player == localPlayer then
+        return
+    end
+    
+    local function onCharacterAdded(character)
+        -- Remove existing highlight if it exists
+        if highlightInstances[player.Name] then
+            pcall(function() highlightInstances[player.Name]:Destroy() end)
+        end
+        
+        -- Create a new Highlight instance and set properties
+        local highlight = Instance.new("Highlight")
+        highlight.Archivable = true
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Ensures highlight is always visible
+        highlight.Enabled = settings.highlightEnabled
+        highlight.FillColor = settings.highlightFillColor
+        highlight.OutlineColor = settings.highlightOutlineColor
+        highlight.FillTransparency = settings.highlightFillTransparency
+        highlight.OutlineTransparency = settings.highlightOutlineTransparency
+        highlight.Parent = character
+        
+        highlightInstances[player.Name] = highlight
+    end
+    
+    -- If the player's character already exists, apply the highlight
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+    
+    -- Connect to CharacterAdded to ensure highlight is added when character respawns
+    player.CharacterAdded:Connect(onCharacterAdded)
+end
+
+local function toggleHighlightESP(enabled)
+    settings.highlightEnabled = enabled
+    
+    -- Update all existing highlights
+    for playerName, highlight in pairs(highlightInstances) do
+        pcall(function() highlight.Enabled = enabled end)
+    end
+    
+    -- If enabled, make sure all players have highlights
+    if enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= localPlayer or not settings.teamCheck then
+                applyHighlight(player)
+            end
+        end
+    end
+end
+
+-- Listen for new players joining
+Players.PlayerAdded:Connect(function(player)
+    if settings.highlightEnabled then
+        applyHighlight(player)
+    end
+end)
+
+-- Listen for players leaving
+Players.PlayerRemoving:Connect(function(player)
+    if highlightInstances[player.Name] then
+        pcall(function() highlightInstances[player.Name]:Destroy() end)
+        highlightInstances[player.Name] = nil
+    end
+end)
+
+-- Forward declaration for functions
+local createUI, toggleUI
+
+-- Create player entry in player list
+local function createPlayerEntry(player, parent, index)
     local entryHeight = 70
     local yPos = (index - 1) * entryHeight
     
     -- Create entry frame
     local entry = Instance.new("Frame")
     entry.Name = player.Name .. "Entry"
-    entry.Size = UDim2.new(1, -10, 0, entryHeight - 5)
-    entry.Position = UDim2.new(0, 5, 0, yPos)
-    entry.BackgroundColor3 = config.backgroundColor
-    entry.BackgroundTransparency = 0.5
+    entry.Size = UDim2.new(1, -20, 0, entryHeight - 10)
+    entry.Position = UDim2.new(0, 10, 0, yPos)
+    entry.BackgroundColor3 = config.secondaryColor
     entry.BorderSizePixel = 0
     entry.Parent = parent
     
@@ -105,166 +200,93 @@ createPlayerEntry = function(player, parent, index)
     local avatar = Instance.new("ImageLabel")
     avatar.Name = "Avatar"
     avatar.Size = UDim2.new(0, 50, 0, 50)
-    avatar.Position = UDim2.new(0, 10, 0, 10)
+    avatar.Position = UDim2.new(0, 10, 0.5, -25)
     avatar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     avatar.BorderSizePixel = 0
     
     -- Try to load player avatar
-    local success, content = pcall(function()
+    pcall(function()
         local userId = player.UserId
         local thumbType = Enum.ThumbnailType.HeadShot
         local thumbSize = Enum.ThumbnailSize.Size420x420
-        
-        return Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+        local content = Players:GetUserThumbnailAsync(userId, thumbType, thumbSize)
+        avatar.Image = content
     end)
     
-    if success then
-        avatar.Image = content
-    end
+    avatar.Parent = entry
     
     local avatarCorner = Instance.new("UICorner")
     avatarCorner.CornerRadius = UDim.new(1, 0)
     avatarCorner.Parent = avatar
     
-    avatar.Parent = entry
-    
-    -- Create player name
+    -- Create player name label
     local nameLabel = Instance.new("TextLabel")
     nameLabel.Name = "NameLabel"
-    nameLabel.Size = UDim2.new(1, -80, 0, 25)
+    nameLabel.Size = UDim2.new(1, -80, 0, 20)
     nameLabel.Position = UDim2.new(0, 70, 0, 10)
     nameLabel.BackgroundTransparency = 1
-    nameLabel.Font = Enum.Font.GothamSemibold
-    nameLabel.Text = player.DisplayName or player.Name
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.Text = player.DisplayName
     nameLabel.TextColor3 = config.textColor
     nameLabel.TextSize = config.fontSize
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.Parent = entry
     
-    -- Create player username
-    local usernameLabel = Instance.new("TextLabel")
-    usernameLabel.Name = "UsernameLabel"
-    usernameLabel.Size = UDim2.new(1, -80, 0, 20)
-    usernameLabel.Position = UDim2.new(0, 70, 0, 30)
-    usernameLabel.BackgroundTransparency = 1
-    usernameLabel.Font = Enum.Font.Gotham
-    usernameLabel.Text = "@" .. player.Name
-    usernameLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-    usernameLabel.TextSize = config.fontSize - 2
-    usernameLabel.TextXAlignment = Enum.TextXAlignment.Left
-    usernameLabel.Parent = entry
-    
-    -- Create status label
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Name = "StatusLabel"
-    statusLabel.Size = UDim2.new(0, 100, 0, 20)
-    statusLabel.Position = UDim2.new(1, -110, 0, 10)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Font = Enum.Font.Gotham
-    statusLabel.Text = "Online"
-    statusLabel.TextColor3 = Color3.fromRGB(80, 200, 120)
-    statusLabel.TextSize = config.fontSize - 2
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Right
-    statusLabel.Parent = entry
+    -- Create player username label (if different from display name)
+    if player.Name ~= player.DisplayName then
+        local usernameLabel = Instance.new("TextLabel")
+        usernameLabel.Name = "UsernameLabel"
+        usernameLabel.Size = UDim2.new(1, -80, 0, 15)
+        usernameLabel.Position = UDim2.new(0, 70, 0, 30)
+        usernameLabel.BackgroundTransparency = 1
+        usernameLabel.Font = Enum.Font.Gotham
+        usernameLabel.Text = "@" .. player.Name
+        usernameLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
+        usernameLabel.TextSize = config.fontSize - 2
+        usernameLabel.TextXAlignment = Enum.TextXAlignment.Left
+        usernameLabel.Parent = entry
+    end
     
     return entry
 end
 
--- Update player list
-updatePlayerList = function(contentFrame)
-    -- Clear existing entries
-    for _, child in pairs(contentFrame:GetChildren()) do
-        child:Destroy()
-    end
-    
-    -- Get all players
-    local playerList = Players:GetPlayers()
-    
-    -- Create entries for each player
-    for i, player in ipairs(playerList) do
-        createPlayerEntry(player, contentFrame, i)
-    end
-    
-    -- Update canvas size
-    contentFrame.CanvasSize = UDim2.new(0, 0, 0, #playerList * 70)
-end
-
--- Create main UI
+-- Create UI
 createUI = function()
     -- Create ScreenGui
     local screenGui
     
     -- Check if we're in a normal Roblox environment or an executor
     local success, result = pcall(function()
-        -- Try to create a ScreenGui as a child of PlayerGui
-        if PlayerGui then
-            local gui = Instance.new("ScreenGui")
-            gui.Name = "PlayerPanel"
-            gui.ResetOnSpawn = false
-            gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-            gui.Parent = PlayerGui
-            return gui
+        screenGui = Instance.new("ScreenGui")
+        screenGui.Name = "PrismAnalytics"
+        screenGui.ResetOnSpawn = false
+        
+        -- Try to use exploit's protect_gui function
+        if exploitFunctions.protectGui then
+            exploitFunctions.protectGui(screenGui)
+            screenGui.Parent = game:GetService("CoreGui")
         else
-            -- If PlayerGui doesn't exist, we might be in an executor
-            local gui = Instance.new("ScreenGui")
-            gui.Name = "PlayerPanel"
-            gui.ResetOnSpawn = false
-            gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-            
-            -- Try different parent options for executors
-            if game:GetService("CoreGui") then
-                gui.Parent = game:GetService("CoreGui")
-            elseif game.Players.LocalPlayer:FindFirstChild("PlayerGui") then
-                gui.Parent = game.Players.LocalPlayer.PlayerGui
-            else
-                -- Last resort
-                gui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
-            end
-            
-            return gui
+            screenGui.Parent = game:GetService("CoreGui")
         end
+        
+        return screenGui
     end)
     
-    if success then
-        screenGui = result
-    else
-        -- Fallback method for some executors
+    if not success then
+        -- Fallback method
         screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "PlayerPanel"
+        screenGui.Name = "PrismAnalytics"
         
-        -- Try to use protected GUI methods with a defensive approach
-        local function tryParentGui()
-            local env = getfenv(1)
-            
-            -- Try Synapse X
-            if pcall(function() return env["syn"] and env["syn"]["protect_gui"] end) then
-                local protectGui = env["syn"]["protect_gui"]
-                protectGui(screenGui)
-                screenGui.Parent = game:GetService("CoreGui")
-                return true
-            end
-            
-            -- Try other protect_gui implementations
-            if pcall(function() return env["protect_gui"] end) then
-                local protectGui = env["protect_gui"]
-                protectGui(screenGui)
-                screenGui.Parent = game:GetService("CoreGui")
-                return true
-            end
-            
-            -- Try gethui
-            if pcall(function() return env["gethui"] end) then
-                local getHui = env["gethui"]
-                screenGui.Parent = getHui()
-                return true
-            end
-            
-            -- Last resort
+        -- Try to parent to CoreGui or PlayerGui
+        pcall(function()
             screenGui.Parent = game:GetService("CoreGui")
-            return true
-        end
+        end)
         
-        pcall(tryParentGui)
+        if not screenGui.Parent then
+            pcall(function()
+                screenGui.Parent = game:GetService("Players").LocalPlayer.PlayerGui
+            end)
+        end
     end
     
     -- Create main frame
@@ -276,7 +298,6 @@ createUI = function()
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
     mainFrame.Draggable = true
-    mainFrame.Parent = screenGui
     
     -- Add corner radius
     local corner = Instance.new("UICorner")
@@ -292,39 +313,31 @@ createUI = function()
     titleBar.BorderSizePixel = 0
     titleBar.Parent = mainFrame
     
-    -- Create title
-    local title = Instance.new("TextLabel")
-    title.Name = "Title"
-    title.Size = UDim2.new(1, -80, 1, 0)
-    title.Position = UDim2.new(0, 40, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamSemibold
-    title.Text = "Prism Analytics"
-    title.TextColor3 = config.textColor
-    title.TextSize = config.fontSize + 2
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = titleBar
+    local titleBarCorner = Instance.new("UICorner")
+    titleBarCorner.CornerRadius = config.cornerRadius
+    titleBarCorner.Parent = titleBar
     
-    -- Create menu button
-    local menuButton = Instance.new("ImageButton")
-    menuButton.Name = "MenuButton"
-    menuButton.Size = UDim2.new(0, 20, 0, 20)
-    menuButton.Position = UDim2.new(0, 10, 0, 5)
-    menuButton.BackgroundTransparency = 1
-    menuButton.Image = "rbxassetid://3926305904"
-    menuButton.ImageRectOffset = Vector2.new(604, 684)
-    menuButton.ImageRectSize = Vector2.new(36, 36)
-    menuButton.ImageColor3 = config.textColor
-    menuButton.Parent = titleBar
+    -- Create title label
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Name = "TitleLabel"
+    titleLabel.Size = UDim2.new(1, -60, 1, 0)
+    titleLabel.Position = UDim2.new(0, 10, 0, 0)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.Font = Enum.Font.GothamBold
+    titleLabel.Text = "Prism Analytics"
+    titleLabel.TextColor3 = config.textColor
+    titleLabel.TextSize = 16
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = titleBar
     
     -- Create close button
     local closeButton = Instance.new("ImageButton")
     closeButton.Name = "CloseButton"
-    closeButton.Size = UDim2.new(0, 20, 0, 20)
-    closeButton.Position = UDim2.new(1, -30, 0, 5)
+    closeButton.Size = UDim2.new(0, 16, 0, 16)
+    closeButton.Position = UDim2.new(1, -26, 0.5, -8)
     closeButton.BackgroundTransparency = 1
-    closeButton.Image = "rbxassetid://3926305904"
-    closeButton.ImageRectOffset = Vector2.new(284, 4)
+    closeButton.Image = "rbxassetid://6764432408"
+    closeButton.ImageRectOffset = Vector2.new(200, 0)
     closeButton.ImageRectSize = Vector2.new(24, 24)
     closeButton.ImageColor3 = config.textColor
     closeButton.Parent = titleBar
@@ -332,12 +345,12 @@ createUI = function()
     -- Create minimize button
     local minimizeButton = Instance.new("ImageButton")
     minimizeButton.Name = "MinimizeButton"
-    minimizeButton.Size = UDim2.new(0, 20, 0, 20)
-    minimizeButton.Position = UDim2.new(1, -60, 0, 5)
+    minimizeButton.Size = UDim2.new(0, 16, 0, 16)
+    minimizeButton.Position = UDim2.new(1, -50, 0.5, -8)
     minimizeButton.BackgroundTransparency = 1
-    minimizeButton.Image = "rbxassetid://3926307971"
-    minimizeButton.ImageRectOffset = Vector2.new(884, 284)
-    minimizeButton.ImageRectSize = Vector2.new(36, 36)
+    minimizeButton.Image = "rbxassetid://6764432408"
+    minimizeButton.ImageRectOffset = Vector2.new(175, 0)
+    minimizeButton.ImageRectSize = Vector2.new(24, 24)
     minimizeButton.ImageColor3 = config.textColor
     minimizeButton.Parent = titleBar
     
@@ -355,17 +368,17 @@ createUI = function()
     tabContentArea.Name = "TabContentArea"
     tabContentArea.Size = UDim2.new(1, 0, 1, -60)
     tabContentArea.Position = UDim2.new(0, 0, 0, 60)
-    tabContentArea.BackgroundColor3 = config.backgroundColor
+    tabContentArea.BackgroundTransparency = 1
     tabContentArea.BorderSizePixel = 0
     tabContentArea.Parent = mainFrame
     
     -- Create tabs
-    local tabButtons = {}
+    local tabNames = {"Players", "Visuals", "Aimbot"}
     local tabContent = {}
-    local tabNames = {"Visuals", "Aimbot", "Players"}
+    local tabButtons = {}
     
     for i, tabName in ipairs(tabNames) do
-        -- Create tab button
+        -- Tab buttons
         local tabButton = Instance.new("TextButton")
         tabButton.Name = tabName .. "Button"
         tabButton.Size = UDim2.new(1/#tabNames, 0, 1, 0)
@@ -375,257 +388,57 @@ createUI = function()
         tabButton.Font = Enum.Font.Gotham
         tabButton.Text = tabName
         tabButton.TextColor3 = config.textColor
-        tabButton.TextSize = config.fontSize
+        tabButton.TextSize = 14
         tabButton.Parent = tabBar
+        
         tabButtons[i] = tabButton
         
-        -- Create tab content
-        local content = Instance.new("Frame")
-        content.Name = tabName .. "Content"
-        content.Size = UDim2.new(1, 0, 1, 0)
-        content.Position = UDim2.new(0, 0, 0, 0)
-        content.BackgroundTransparency = 1
-        content.BorderSizePixel = 0
-        content.Visible = false
-        content.Parent = tabContentArea
-        tabContent[i] = content
+        -- Tab content frames
+        local contentFrame = Instance.new("Frame")
+        contentFrame.Name = tabName .. "Content"
+        contentFrame.Size = UDim2.new(1, 0, 1, 0)
+        contentFrame.BackgroundTransparency = 1
+        contentFrame.BorderSizePixel = 0
+        contentFrame.Visible = false
+        contentFrame.Parent = tabContentArea
+        
+        tabContent[i] = contentFrame
     end
     
     -- Create visuals tab content
-    local visualsTab = tabContent[1]
+    local visualsTab = tabContent[2]
     visualsTab.Visible = true -- Make this tab visible by default
-    tabButtons[1].BackgroundColor3 = config.accentColor -- Select this tab by default
+    tabButtons[2].BackgroundColor3 = config.accentColor -- Select this tab by default
     
     -- Create a scrolling frame for the visuals tab
     local visualsScroll = Instance.new("ScrollingFrame")
     visualsScroll.Name = "VisualsScroll"
-    visualsScroll.Size = UDim2.new(1, -10, 1, -10)
-    visualsScroll.Position = UDim2.new(0, 5, 0, 5)
+    visualsScroll.Size = UDim2.new(1, 0, 1, 0)
+    visualsScroll.CanvasSize = UDim2.new(0, 0, 0, 300)
     visualsScroll.BackgroundTransparency = 1
     visualsScroll.BorderSizePixel = 0
     visualsScroll.ScrollBarThickness = 4
-    visualsScroll.ScrollBarImageColor3 = config.accentColor
-    visualsScroll.CanvasSize = UDim2.new(0, 0, 0, 300) -- Will adjust based on content
+    visualsScroll.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
     visualsScroll.Parent = visualsTab
     
-    -- Create a title for the ESP section
-    local espTitle = Instance.new("TextLabel")
-    espTitle.Name = "ESPTitle"
-    espTitle.Size = UDim2.new(1, -20, 0, 30)
-    espTitle.Position = UDim2.new(0, 10, 0, 10)
-    espTitle.BackgroundTransparency = 1
-    espTitle.Font = Enum.Font.GothamBold
-    espTitle.Text = "ESP Options"
-    espTitle.TextColor3 = config.accentColor
-    espTitle.TextSize = config.fontSize + 2
-    espTitle.TextXAlignment = Enum.TextXAlignment.Left
-    espTitle.Parent = visualsScroll
-    
-    -- Main ESP toggle
-    local espToggle = Instance.new("Frame")
-    espToggle.Name = "ESPToggle"
-    espToggle.Size = UDim2.new(1, -20, 0, 30)
-    espToggle.Position = UDim2.new(0, 10, 0, 50)
-    espToggle.BackgroundColor3 = config.secondaryColor
-    espToggle.BorderSizePixel = 0
-    espToggle.Parent = visualsScroll
-    
-    local espToggleCorner = Instance.new("UICorner")
-    espToggleCorner.CornerRadius = config.cornerRadius
-    espToggleCorner.Parent = espToggle
-    
-    local espToggleLabel = Instance.new("TextLabel")
-    espToggleLabel.Name = "Label"
-    espToggleLabel.Size = UDim2.new(1, -60, 1, 0)
-    espToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-    espToggleLabel.BackgroundTransparency = 1
-    espToggleLabel.Font = Enum.Font.Gotham
-    espToggleLabel.Text = "ESP Enabled"
-    espToggleLabel.TextColor3 = config.textColor
-    espToggleLabel.TextSize = config.fontSize
-    espToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    espToggleLabel.Parent = espToggle
-    
-    local espToggleButton = Instance.new("TextButton")
-    espToggleButton.Name = "Button"
-    espToggleButton.Size = UDim2.new(0, 40, 0, 20)
-    espToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
-    espToggleButton.BackgroundColor3 = settings.espEnabled and config.toggleOnColor or config.toggleOffColor
-    espToggleButton.BorderSizePixel = 0
-    espToggleButton.Text = ""
-    espToggleButton.Parent = espToggle
-    
-    local espToggleButtonCorner = Instance.new("UICorner")
-    espToggleButtonCorner.CornerRadius = UDim.new(1, 0)
-    espToggleButtonCorner.Parent = espToggleButton
-    
-    local espToggleCircle = Instance.new("Frame")
-    espToggleCircle.Name = "Circle"
-    espToggleCircle.Size = UDim2.new(0, 16, 0, 16)
-    espToggleCircle.Position = settings.espEnabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    espToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    espToggleCircle.BorderSizePixel = 0
-    espToggleCircle.Parent = espToggleButton
-    
-    local espToggleCircleCorner = Instance.new("UICorner")
-    espToggleCircleCorner.CornerRadius = UDim.new(1, 0)
-    espToggleCircleCorner.Parent = espToggleCircle
-    
-    -- Box ESP toggle
-    local boxEspToggle = Instance.new("Frame")
-    boxEspToggle.Name = "BoxESPToggle"
-    boxEspToggle.Size = UDim2.new(1, -20, 0, 30)
-    boxEspToggle.Position = UDim2.new(0, 10, 0, 90)
-    boxEspToggle.BackgroundColor3 = config.secondaryColor
-    boxEspToggle.BorderSizePixel = 0
-    boxEspToggle.Parent = visualsScroll
-    
-    local boxEspToggleCorner = Instance.new("UICorner")
-    boxEspToggleCorner.CornerRadius = config.cornerRadius
-    boxEspToggleCorner.Parent = boxEspToggle
-    
-    local boxEspToggleLabel = Instance.new("TextLabel")
-    boxEspToggleLabel.Name = "Label"
-    boxEspToggleLabel.Size = UDim2.new(1, -60, 1, 0)
-    boxEspToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-    boxEspToggleLabel.BackgroundTransparency = 1
-    boxEspToggleLabel.Font = Enum.Font.Gotham
-    boxEspToggleLabel.Text = "Box ESP"
-    boxEspToggleLabel.TextColor3 = config.textColor
-    boxEspToggleLabel.TextSize = config.fontSize
-    boxEspToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    boxEspToggleLabel.Parent = boxEspToggle
-    
-    local boxEspToggleButton = Instance.new("TextButton")
-    boxEspToggleButton.Name = "Button"
-    boxEspToggleButton.Size = UDim2.new(0, 40, 0, 20)
-    boxEspToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
-    boxEspToggleButton.BackgroundColor3 = settings.boxEsp and config.toggleOnColor or config.toggleOffColor
-    boxEspToggleButton.BorderSizePixel = 0
-    boxEspToggleButton.Text = ""
-    boxEspToggleButton.Parent = boxEspToggle
-    
-    local boxEspToggleButtonCorner = Instance.new("UICorner")
-    boxEspToggleButtonCorner.CornerRadius = UDim.new(1, 0)
-    boxEspToggleButtonCorner.Parent = boxEspToggleButton
-    
-    local boxEspToggleCircle = Instance.new("Frame")
-    boxEspToggleCircle.Name = "Circle"
-    boxEspToggleCircle.Size = UDim2.new(0, 16, 0, 16)
-    boxEspToggleCircle.Position = settings.boxEsp and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    boxEspToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    boxEspToggleCircle.BorderSizePixel = 0
-    boxEspToggleCircle.Parent = boxEspToggleButton
-    
-    local boxEspToggleCircleCorner = Instance.new("UICorner")
-    boxEspToggleCircleCorner.CornerRadius = UDim.new(1, 0)
-    boxEspToggleCircleCorner.Parent = boxEspToggleCircle
-    
-    -- Name ESP toggle
-    local nameEspToggle = Instance.new("Frame")
-    nameEspToggle.Name = "NameESPToggle"
-    nameEspToggle.Size = UDim2.new(1, -20, 0, 30)
-    nameEspToggle.Position = UDim2.new(0, 10, 0, 130)
-    nameEspToggle.BackgroundColor3 = config.secondaryColor
-    nameEspToggle.BorderSizePixel = 0
-    nameEspToggle.Parent = visualsScroll
-    
-    local nameEspToggleCorner = Instance.new("UICorner")
-    nameEspToggleCorner.CornerRadius = config.cornerRadius
-    nameEspToggleCorner.Parent = nameEspToggle
-    
-    local nameEspToggleLabel = Instance.new("TextLabel")
-    nameEspToggleLabel.Name = "Label"
-    nameEspToggleLabel.Size = UDim2.new(1, -60, 1, 0)
-    nameEspToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-    nameEspToggleLabel.BackgroundTransparency = 1
-    nameEspToggleLabel.Font = Enum.Font.Gotham
-    nameEspToggleLabel.Text = "Name ESP"
-    nameEspToggleLabel.TextColor3 = config.textColor
-    nameEspToggleLabel.TextSize = config.fontSize
-    nameEspToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    nameEspToggleLabel.Parent = nameEspToggle
-    
-    local nameEspToggleButton = Instance.new("TextButton")
-    nameEspToggleButton.Name = "Button"
-    nameEspToggleButton.Size = UDim2.new(0, 40, 0, 20)
-    nameEspToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
-    nameEspToggleButton.BackgroundColor3 = settings.nameEsp and config.toggleOnColor or config.toggleOffColor
-    nameEspToggleButton.BorderSizePixel = 0
-    nameEspToggleButton.Text = ""
-    nameEspToggleButton.Parent = nameEspToggle
-    
-    local nameEspToggleButtonCorner = Instance.new("UICorner")
-    nameEspToggleButtonCorner.CornerRadius = UDim.new(1, 0)
-    nameEspToggleButtonCorner.Parent = nameEspToggleButton
-    
-    local nameEspToggleCircle = Instance.new("Frame")
-    nameEspToggleCircle.Name = "Circle"
-    nameEspToggleCircle.Size = UDim2.new(0, 16, 0, 16)
-    nameEspToggleCircle.Position = settings.nameEsp and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    nameEspToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    nameEspToggleCircle.BorderSizePixel = 0
-    nameEspToggleCircle.Parent = nameEspToggleButton
-    
-    local nameEspToggleCircleCorner = Instance.new("UICorner")
-    nameEspToggleCircleCorner.CornerRadius = UDim.new(1, 0)
-    nameEspToggleCircleCorner.Parent = nameEspToggleCircle
-    
-    -- Health ESP toggle
-    local healthEspToggle = Instance.new("Frame")
-    healthEspToggle.Name = "HealthESPToggle"
-    healthEspToggle.Size = UDim2.new(1, -20, 0, 30)
-    healthEspToggle.Position = UDim2.new(0, 10, 0, 170)
-    healthEspToggle.BackgroundColor3 = config.secondaryColor
-    healthEspToggle.BorderSizePixel = 0
-    healthEspToggle.Parent = visualsScroll
-    
-    local healthEspToggleCorner = Instance.new("UICorner")
-    healthEspToggleCorner.CornerRadius = config.cornerRadius
-    healthEspToggleCorner.Parent = healthEspToggle
-    
-    local healthEspToggleLabel = Instance.new("TextLabel")
-    healthEspToggleLabel.Name = "Label"
-    healthEspToggleLabel.Size = UDim2.new(1, -60, 1, 0)
-    healthEspToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-    healthEspToggleLabel.BackgroundTransparency = 1
-    healthEspToggleLabel.Font = Enum.Font.Gotham
-    healthEspToggleLabel.Text = "Health ESP"
-    healthEspToggleLabel.TextColor3 = config.textColor
-    healthEspToggleLabel.TextSize = config.fontSize
-    healthEspToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    healthEspToggleLabel.Parent = healthEspToggle
-    
-    local healthEspToggleButton = Instance.new("TextButton")
-    healthEspToggleButton.Name = "Button"
-    healthEspToggleButton.Size = UDim2.new(0, 40, 0, 20)
-    healthEspToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
-    healthEspToggleButton.BackgroundColor3 = settings.healthEsp and config.toggleOnColor or config.toggleOffColor
-    healthEspToggleButton.BorderSizePixel = 0
-    healthEspToggleButton.Text = ""
-    healthEspToggleButton.Parent = healthEspToggle
-    
-    local healthEspToggleButtonCorner = Instance.new("UICorner")
-    healthEspToggleButtonCorner.CornerRadius = UDim.new(1, 0)
-    healthEspToggleButtonCorner.Parent = healthEspToggleButton
-    
-    local healthEspToggleCircle = Instance.new("Frame")
-    healthEspToggleCircle.Name = "Circle"
-    healthEspToggleCircle.Size = UDim2.new(0, 16, 0, 16)
-    healthEspToggleCircle.Position = settings.healthEsp and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    healthEspToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    healthEspToggleCircle.BorderSizePixel = 0
-    healthEspToggleCircle.Parent = healthEspToggleButton
-    
-    local healthEspToggleCircleCorner = Instance.new("UICorner")
-    healthEspToggleCircleCorner.CornerRadius = UDim.new(1, 0)
-    healthEspToggleCircleCorner.Parent = healthEspToggleCircle
+    -- Create visuals options
+    local visualTitle = Instance.new("TextLabel")
+    visualTitle.Name = "VisualsTitle"
+    visualTitle.Size = UDim2.new(1, -20, 0, 30)
+    visualTitle.Position = UDim2.new(0, 10, 0, 10)
+    visualTitle.BackgroundTransparency = 1
+    visualTitle.Font = Enum.Font.GothamBold
+    visualTitle.Text = "Player Visuals"
+    visualTitle.TextColor3 = config.textColor
+    visualTitle.TextSize = 16
+    visualTitle.TextXAlignment = Enum.TextXAlignment.Left
+    visualTitle.Parent = visualsScroll
     
     -- Highlight ESP toggle
     local highlightEspToggle = Instance.new("Frame")
     highlightEspToggle.Name = "HighlightESPToggle"
     highlightEspToggle.Size = UDim2.new(1, -20, 0, 30)
-    highlightEspToggle.Position = UDim2.new(0, 10, 0, 210)
+    highlightEspToggle.Position = UDim2.new(0, 10, 0, 50)
     highlightEspToggle.BackgroundColor3 = config.secondaryColor
     highlightEspToggle.BorderSizePixel = 0
     highlightEspToggle.Parent = visualsScroll
@@ -640,7 +453,7 @@ createUI = function()
     highlightEspToggleLabel.Position = UDim2.new(0, 10, 0, 0)
     highlightEspToggleLabel.BackgroundTransparency = 1
     highlightEspToggleLabel.Font = Enum.Font.Gotham
-    highlightEspToggleLabel.Text = "Highlight ESP"
+    highlightEspToggleLabel.Text = "Highlight Players"
     highlightEspToggleLabel.TextColor3 = config.textColor
     highlightEspToggleLabel.TextSize = config.fontSize
     highlightEspToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -671,58 +484,117 @@ createUI = function()
     highlightEspToggleCircleCorner.CornerRadius = UDim.new(1, 0)
     highlightEspToggleCircleCorner.Parent = highlightEspToggleCircle
     
-    -- Chams toggle
-    local chamsToggle = Instance.new("Frame")
-    chamsToggle.Name = "ChamsToggle"
-    chamsToggle.Size = UDim2.new(1, -20, 0, 30)
-    chamsToggle.Position = UDim2.new(0, 10, 0, 250)
-    chamsToggle.BackgroundColor3 = config.secondaryColor
-    chamsToggle.BorderSizePixel = 0
-    chamsToggle.Parent = visualsScroll
+    -- Add Advanced ESP button
+    local advancedEspButton = Instance.new("TextButton")
+    advancedEspButton.Name = "AdvancedEspButton"
+    advancedEspButton.Size = UDim2.new(1, -20, 0, 40)
+    advancedEspButton.Position = UDim2.new(0, 10, 0, 90)
+    advancedEspButton.BackgroundColor3 = config.accentColor
+    advancedEspButton.BorderSizePixel = 0
+    advancedEspButton.Font = Enum.Font.GothamBold
+    advancedEspButton.Text = "Open Advanced ESP"
+    advancedEspButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    advancedEspButton.TextSize = 14
+    advancedEspButton.Parent = visualsScroll
     
-    local chamsToggleCorner = Instance.new("UICorner")
-    chamsToggleCorner.CornerRadius = config.cornerRadius
-    chamsToggleCorner.Parent = chamsToggle
+    local advancedEspButtonCorner = Instance.new("UICorner")
+    advancedEspButtonCorner.CornerRadius = config.cornerRadius
+    advancedEspButtonCorner.Parent = advancedEspButton
     
-    local chamsToggleLabel = Instance.new("TextLabel")
-    chamsToggleLabel.Name = "Label"
-    chamsToggleLabel.Size = UDim2.new(1, -60, 1, 0)
-    chamsToggleLabel.Position = UDim2.new(0, 10, 0, 0)
-    chamsToggleLabel.BackgroundTransparency = 1
-    chamsToggleLabel.Font = Enum.Font.Gotham
-    chamsToggleLabel.Text = "Player Chams"
-    chamsToggleLabel.TextColor3 = config.textColor
-    chamsToggleLabel.TextSize = config.fontSize
-    chamsToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-    chamsToggleLabel.Parent = chamsToggle
+    -- Create player panel (moved to its own tab)
+    local playerTab = tabContent[1]
     
-    local chamsToggleButton = Instance.new("TextButton")
-    chamsToggleButton.Name = "Button"
-    chamsToggleButton.Size = UDim2.new(0, 40, 0, 20)
-    chamsToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
-    chamsToggleButton.BackgroundColor3 = settings.chamsEnabled and config.toggleOnColor or config.toggleOffColor
-    chamsToggleButton.BorderSizePixel = 0
-    chamsToggleButton.Text = ""
-    chamsToggleButton.Parent = chamsToggle
+    -- Create a scrolling frame for the player tab
+    local playerScroll = Instance.new("ScrollingFrame")
+    playerScroll.Name = "PlayerScroll"
+    playerScroll.Size = UDim2.new(1, -10, 1, -10)
+    playerScroll.Position = UDim2.new(0, 5, 0, 5)
+    playerScroll.BackgroundTransparency = 1
+    playerScroll.BorderSizePixel = 0
+    playerScroll.ScrollBarThickness = 4
+    playerScroll.ScrollBarImageColor3 = config.accentColor
+    playerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerScroll.Parent = playerTab
     
-    local chamsToggleButtonCorner = Instance.new("UICorner")
-    chamsToggleButtonCorner.CornerRadius = UDim.new(1, 0)
-    chamsToggleButtonCorner.Parent = chamsToggleButton
+    -- Create a title for the Player panel
+    local playerTitle = Instance.new("TextLabel")
+    playerTitle.Name = "PlayerTitle"
+    playerTitle.Size = UDim2.new(1, -20, 0, 30)
+    playerTitle.Position = UDim2.new(0, 10, 0, 10)
+    playerTitle.BackgroundTransparency = 1
+    playerTitle.Font = Enum.Font.GothamBold
+    playerTitle.Text = "Player Information"
+    playerTitle.TextColor3 = config.accentColor
+    playerTitle.TextSize = config.fontSize + 2
+    playerTitle.TextXAlignment = Enum.TextXAlignment.Left
+    playerTitle.Parent = playerScroll
     
-    local chamsToggleCircle = Instance.new("Frame")
-    chamsToggleCircle.Name = "Circle"
-    chamsToggleCircle.Size = UDim2.new(0, 16, 0, 16)
-    chamsToggleCircle.Position = settings.chamsEnabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
-    chamsToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    chamsToggleCircle.BorderSizePixel = 0
-    chamsToggleCircle.Parent = chamsToggleButton
+    -- Create player list container
+    local playerListFrame = Instance.new("Frame")
+    playerListFrame.Name = "PlayerListFrame"
+    playerListFrame.Size = UDim2.new(1, -20, 0, 0) -- Height will be set dynamically
+    playerListFrame.Position = UDim2.new(0, 10, 0, 50)
+    playerListFrame.BackgroundTransparency = 1
+    playerListFrame.BorderSizePixel = 0
+    playerListFrame.Parent = playerScroll
     
-    local chamsToggleCircleCorner = Instance.new("UICorner")
-    chamsToggleCircleCorner.CornerRadius = UDim.new(1, 0)
-    chamsToggleCircleCorner.Parent = chamsToggleCircle
+    -- Function to update the player list
+    local function updatePlayerList()
+        -- Clear existing player entries
+        for _, child in pairs(playerListFrame:GetChildren()) do
+            child:Destroy()
+        end
+        
+        local yOffset = 0
+        
+        -- Add player entries
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= localPlayer then
+                local playerEntry = createPlayerEntry(player, playerListFrame, #playerListFrame:GetChildren() + 1)
+                yOffset = yOffset + 70
+            end
+        end
+        
+        playerListFrame.Size = UDim2.new(1, -20, 0, yOffset)
+        playerScroll.CanvasSize = UDim2.new(0, 0, 0, yOffset + 60)
+    end
+    
+    -- Initial update
+    updatePlayerList()
+    
+    -- Update player list when players join or leave
+    Players.PlayerAdded:Connect(updatePlayerList)
+    Players.PlayerRemoving:Connect(updatePlayerList)
+    
+    -- Update player info periodically
+    RunService.Heartbeat:Connect(function()
+        for _, playerEntry in pairs(playerListFrame:GetChildren()) do
+            if playerEntry:IsA("Frame") then
+                local playerName = playerEntry.Name:gsub("Entry$", "")
+                local player = Players:FindFirstChild(playerName)
+                
+                if player then
+                    local character = player.Character
+                    local humanoid = character and character:FindFirstChild("Humanoid")
+                    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                    
+                    if humanoid and rootPart then
+                        local health = humanoid.Health
+                        local maxHealth = humanoid.MaxHealth
+                        local distance = math.floor((rootPart.Position - localPlayer.Character.HumanoidRootPart.Position).Magnitude)
+                        
+                        local infoText = "Health: " .. math.floor(health) .. "/" .. math.floor(maxHealth) .. " | Distance: " .. distance .. " studs"
+                        playerEntry.PlayerInfo.Text = infoText
+                    else
+                        playerEntry.PlayerInfo.Text = "Character not loaded"
+                    end
+                end
+            end
+        end
+    end)
     
     -- Create aimbot tab content
-    local aimbotTab = tabContent[2]
+    local aimbotTab = tabContent[3]
     
     -- Create a scrolling frame for the aimbot tab
     local aimbotScroll = Instance.new("ScrollingFrame")
@@ -940,133 +812,6 @@ createUI = function()
     fovKnobCorner.CornerRadius = UDim.new(1, 0)
     fovKnobCorner.Parent = fovKnob
     
-    -- Player panel (moved to its own tab)
-    local playerTab = tabContent[3]
-    
-    -- Create a scrolling frame for the player tab
-    local playerScroll = Instance.new("ScrollingFrame")
-    playerScroll.Name = "PlayerScroll"
-    playerScroll.Size = UDim2.new(1, -10, 1, -10)
-    playerScroll.Position = UDim2.new(0, 5, 0, 5)
-    playerScroll.BackgroundTransparency = 1
-    playerScroll.BorderSizePixel = 0
-    playerScroll.ScrollBarThickness = 4
-    playerScroll.ScrollBarImageColor3 = config.accentColor
-    playerScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-    playerScroll.Parent = playerTab
-    
-    -- Create a title for the Player panel
-    local playerTitle = Instance.new("TextLabel")
-    playerTitle.Name = "PlayerTitle"
-    playerTitle.Size = UDim2.new(1, -20, 0, 30)
-    playerTitle.Position = UDim2.new(0, 10, 0, 10)
-    playerTitle.BackgroundTransparency = 1
-    playerTitle.Font = Enum.Font.GothamBold
-    playerTitle.Text = "Player Information"
-    playerTitle.TextColor3 = config.accentColor
-    playerTitle.TextSize = config.fontSize + 2
-    playerTitle.TextXAlignment = Enum.TextXAlignment.Left
-    playerTitle.Parent = playerScroll
-    
-    -- Create player list container
-    local playerListFrame = Instance.new("Frame")
-    playerListFrame.Name = "PlayerListFrame"
-    playerListFrame.Size = UDim2.new(1, -20, 0, 0) -- Height will be set dynamically
-    playerListFrame.Position = UDim2.new(0, 10, 0, 50)
-    playerListFrame.BackgroundTransparency = 1
-    playerListFrame.BorderSizePixel = 0
-    playerListFrame.Parent = playerScroll
-    
-    -- Function to update the player list
-    local function updatePlayerList()
-        -- Clear existing player entries
-        for _, child in pairs(playerListFrame:GetChildren()) do
-            child:Destroy()
-        end
-        
-        local yOffset = 0
-        
-        -- Add player entries
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= localPlayer then
-                local playerEntry = Instance.new("Frame")
-                playerEntry.Name = player.Name .. "Entry"
-                playerEntry.Size = UDim2.new(1, 0, 0, 60)
-                playerEntry.Position = UDim2.new(0, 0, 0, yOffset)
-                playerEntry.BackgroundColor3 = config.secondaryColor
-                playerEntry.BorderSizePixel = 0
-                playerEntry.Parent = playerListFrame
-                
-                local playerEntryCorner = Instance.new("UICorner")
-                playerEntryCorner.CornerRadius = config.cornerRadius
-                playerEntryCorner.Parent = playerEntry
-                
-                local playerName = Instance.new("TextLabel")
-                playerName.Name = "PlayerName"
-                playerName.Size = UDim2.new(1, -20, 0, 25)
-                playerName.Position = UDim2.new(0, 10, 0, 5)
-                playerName.BackgroundTransparency = 1
-                playerName.Font = Enum.Font.GothamBold
-                playerName.Text = player.Name
-                playerName.TextColor3 = config.textColor
-                playerName.TextSize = config.fontSize
-                playerName.TextXAlignment = Enum.TextXAlignment.Left
-                playerName.Parent = playerEntry
-                
-                local playerInfo = Instance.new("TextLabel")
-                playerInfo.Name = "PlayerInfo"
-                playerInfo.Size = UDim2.new(1, -20, 0, 20)
-                playerInfo.Position = UDim2.new(0, 10, 0, 30)
-                playerInfo.BackgroundTransparency = 1
-                playerInfo.Font = Enum.Font.Gotham
-                playerInfo.Text = "Loading info..."
-                playerInfo.TextColor3 = Color3.fromRGB(200, 200, 200)
-                playerInfo.TextSize = config.fontSize - 2
-                playerInfo.TextXAlignment = Enum.TextXAlignment.Left
-                playerInfo.Parent = playerEntry
-                
-                yOffset = yOffset + 70
-            end
-        end
-        
-        playerListFrame.Size = UDim2.new(1, -20, 0, yOffset)
-        playerScroll.CanvasSize = UDim2.new(0, 0, 0, yOffset + 60)
-    end
-    
-    -- Initial update
-    updatePlayerList()
-    
-    -- Update player list when players join or leave
-    Players.PlayerAdded:Connect(updatePlayerList)
-    Players.PlayerRemoving:Connect(updatePlayerList)
-    
-    -- Update player info periodically
-    RunService.Heartbeat:Connect(function()
-        for _, playerEntry in pairs(playerListFrame:GetChildren()) do
-            if playerEntry:IsA("Frame") then
-                local playerName = playerEntry.Name:gsub("Entry$", "")
-                local player = Players:FindFirstChild(playerName)
-                
-                if player then
-                    local character = player.Character
-                    local humanoid = character and character:FindFirstChild("Humanoid")
-                    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-                    
-                    if humanoid and rootPart then
-                        local health = humanoid.Health
-                        local maxHealth = humanoid.MaxHealth
-                        local distance = math.floor((rootPart.Position - localPlayer.Character.HumanoidRootPart.Position).Magnitude)
-                        
-                        local infoText = "Health: " .. math.floor(health) .. "/" .. math.floor(maxHealth) .. " | Distance: " .. distance .. " studs"
-                        playerEntry.PlayerInfo.Text = infoText
-                    else
-                        playerEntry.PlayerInfo.Text = "Character not loaded"
-                    end
-                end
-            end
-        end
-    end)
-    
     -- Connect events
     closeButton.MouseButton1Click:Connect(function()
         screenGui:Destroy()
@@ -1110,87 +855,17 @@ createUI = function()
     end
     
     -- Toggle events
-    espToggleButton.MouseButton1Click:Connect(function()
-        if settings.espEnabled then
-            settings.espEnabled = false
-            espToggleButton.BackgroundColor3 = config.toggleOffColor
-            espToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
-            ESP:ToggleESP(false)
-        else
-            settings.espEnabled = true
-            espToggleButton.BackgroundColor3 = config.toggleOnColor
-            espToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
-            ESP:ToggleESP(true)
-        end
-    end)
-    
-    boxEspToggleButton.MouseButton1Click:Connect(function()
-        if settings.boxEsp then
-            settings.boxEsp = false
-            boxEspToggleButton.BackgroundColor3 = config.toggleOffColor
-            boxEspToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
-            ESP:ToggleBoxESP(false)
-        else
-            settings.boxEsp = true
-            boxEspToggleButton.BackgroundColor3 = config.toggleOnColor
-            boxEspToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
-            ESP:ToggleBoxESP(true)
-        end
-    end)
-    
-    nameEspToggleButton.MouseButton1Click:Connect(function()
-        if settings.nameEsp then
-            settings.nameEsp = false
-            nameEspToggleButton.BackgroundColor3 = config.toggleOffColor
-            nameEspToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
-            ESP:ToggleNameESP(false)
-        else
-            settings.nameEsp = true
-            nameEspToggleButton.BackgroundColor3 = config.toggleOnColor
-            nameEspToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
-            ESP:ToggleNameESP(true)
-        end
-    end)
-    
-    healthEspToggleButton.MouseButton1Click:Connect(function()
-        if settings.healthEsp then
-            settings.healthEsp = false
-            healthEspToggleButton.BackgroundColor3 = config.toggleOffColor
-            healthEspToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
-            ESP:ToggleHealthESP(false)
-        else
-            settings.healthEsp = true
-            healthEspToggleButton.BackgroundColor3 = config.toggleOnColor
-            healthEspToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
-            ESP:ToggleHealthESP(true)
-        end
-    end)
-    
-    chamsToggleButton.MouseButton1Click:Connect(function()
-        if settings.chamsEnabled then
-            settings.chamsEnabled = false
-            chamsToggleButton.BackgroundColor3 = config.toggleOffColor
-            chamsToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
-            ESP:ToggleChams(false)
-        else
-            settings.chamsEnabled = true
-            chamsToggleButton.BackgroundColor3 = config.toggleOnColor
-            chamsToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
-            ESP:ToggleChams(true)
-        end
-    end)
-    
     highlightEspToggleButton.MouseButton1Click:Connect(function()
         if settings.highlightEnabled then
             settings.highlightEnabled = false
             highlightEspToggleButton.BackgroundColor3 = config.toggleOffColor
             highlightEspToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
-            ESP:ToggleHighlightESP(false)
+            toggleHighlightESP(false)
         else
             settings.highlightEnabled = true
             highlightEspToggleButton.BackgroundColor3 = config.toggleOnColor
             highlightEspToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
-            ESP:ToggleHighlightESP(true)
+            toggleHighlightESP(true)
         end
     end)
     
@@ -1280,97 +955,17 @@ createUI = function()
     end)
     
     -- Initialize ESP module after UI is created
-    ESP:Init()
-    
-    -- Sync initial settings with ESP module
-    ESP.Settings.BoxColor = config.accentColor
-    ESP.Settings.NameColor = config.textColor
-    ESP.Settings.HealthColor = Color3.fromRGB(0, 255, 0)
-    ESP.Settings.ChamsColor = config.accentColor
-    ESP.Settings.ChamsTransparency = 0.5
-    ESP.Settings.TextSize = config.fontSize
+    if ESP and ESP.Init then
+        ESP:Init()
+    end
     
     -- Update ESP settings based on UI settings
-    ESP:ToggleESP(settings.espEnabled)
-    ESP:ToggleBoxESP(settings.boxEsp)
-    ESP:ToggleNameESP(settings.nameEsp)
-    ESP:ToggleHealthESP(settings.healthEsp)
-    ESP:ToggleChams(settings.chamsEnabled)
-    ESP:ToggleHighlightESP(settings.highlightEnabled)
+    if ESP and ESP.ToggleHighlightESP then
+        ESP:ToggleHighlightESP(settings.highlightEnabled)
+    end
     
     return screenGui
 end
-
--- Highlight ESP functionality
-local highlightInstances = {}
-
-local function applyHighlight(player)
-    -- Skip local player if team check is enabled
-    if settings.teamCheck and player == localPlayer then
-        return
-    end
-    
-    local function onCharacterAdded(character)
-        -- Remove existing highlight if it exists
-        if highlightInstances[player.Name] then
-            pcall(function() highlightInstances[player.Name]:Destroy() end)
-        end
-        
-        -- Create a new Highlight instance and set properties
-        local highlight = Instance.new("Highlight")
-        highlight.Archivable = true
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Ensures highlight is always visible
-        highlight.Enabled = settings.highlightEnabled
-        highlight.FillColor = settings.highlightFillColor
-        highlight.OutlineColor = settings.highlightOutlineColor
-        highlight.FillTransparency = settings.highlightFillTransparency
-        highlight.OutlineTransparency = settings.highlightOutlineTransparency
-        highlight.Parent = character
-        
-        highlightInstances[player.Name] = highlight
-    end
-    
-    -- If the player's character already exists, apply the highlight
-    if player.Character then
-        onCharacterAdded(player.Character)
-    end
-    
-    -- Connect to CharacterAdded to ensure highlight is added when character respawns
-    player.CharacterAdded:Connect(onCharacterAdded)
-end
-
-local function toggleHighlightESP(enabled)
-    settings.highlightEnabled = enabled
-    
-    -- Update all existing highlights
-    for playerName, highlight in pairs(highlightInstances) do
-        pcall(function() highlight.Enabled = enabled end)
-    end
-    
-    -- If enabled, make sure all players have highlights
-    if enabled then
-        for _, player in pairs(Players:GetPlayers()) do
-            if player ~= localPlayer or not settings.teamCheck then
-                applyHighlight(player)
-            end
-        end
-    end
-end
-
--- Listen for new players joining
-Players.PlayerAdded:Connect(function(player)
-    if settings.highlightEnabled then
-        applyHighlight(player)
-    end
-end)
-
--- Listen for players leaving
-Players.PlayerRemoving:Connect(function(player)
-    if highlightInstances[player.Name] then
-        pcall(function() highlightInstances[player.Name]:Destroy() end)
-        highlightInstances[player.Name] = nil
-    end
-end)
 
 -- Toggle UI visibility with a keybind
 local uiVisible = false
