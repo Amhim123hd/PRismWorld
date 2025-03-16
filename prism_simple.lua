@@ -10,6 +10,7 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
 
 -- Variables
 local LocalPlayer = Players.LocalPlayer
@@ -29,7 +30,8 @@ local Settings = {
     ToggleKey = Enum.KeyCode.RightShift,
     BoxColor = Color3.fromRGB(255, 255, 255),
     TextColor = Color3.fromRGB(255, 255, 255),
-    ShowUI = true
+    ShowUI = true,
+    HighlightESP = false
 }
 
 -- Create main ScreenGui
@@ -192,6 +194,9 @@ local Toggles = {
     end),
     CreateToggle("Team Color", Settings.TeamColor, function(state)
         Settings.TeamColor = state
+    end),
+    CreateToggle("Highlight ESP", Settings.HighlightESP, function(state)
+        Settings.HighlightESP = state
     end)
 }
 
@@ -426,6 +431,7 @@ local function UpdateESP()
         if highlight then
             highlight.FillColor = playerColor
             highlight.OutlineColor = playerColor
+            highlight.Enabled = Settings.HighlightESP
             highlight.Adornee = character
         end
     end
