@@ -52,7 +52,7 @@ local function notify(title, text, duration)
     titleLabel.BackgroundTransparency = 1
     titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     titleLabel.TextSize = 18
-    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.Font = Enum.Font.GothamBold
     titleLabel.Text = title
     titleLabel.TextXAlignment = Enum.TextXAlignment.Left
     titleLabel.Parent = frame
@@ -63,7 +63,7 @@ local function notify(title, text, duration)
     messageLabel.BackgroundTransparency = 1
     messageLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
     messageLabel.TextSize = 14
-    messageLabel.Font = Enum.Font.SourceSans
+    messageLabel.Font = Enum.Font.Gotham
     messageLabel.Text = text
     messageLabel.TextXAlignment = Enum.TextXAlignment.Left
     messageLabel.TextWrapped = true
@@ -91,6 +91,22 @@ end
 local function main()
     notify("Prism Analytics", "Loading Prism Analytics...", 3)
     
+    -- First, try loading the UI directly (which will load ESP internally)
+    local uiSuccess, uiError = pcall(function()
+        loadstring(game:HttpGet(baseUrl .. "ui.lua"))()
+    end)
+    
+    if uiSuccess then
+        notify("Prism Analytics", "Successfully loaded Prism Analytics!", 3)
+        return
+    else
+        notify("Prism Analytics", "Failed to load UI directly: " .. tostring(uiError), 3)
+        warn("Failed to load UI directly: " .. tostring(uiError))
+    end
+    
+    -- If direct UI loading failed, try loading ESP first then UI
+    notify("Prism Analytics", "Trying alternative loading method...", 2)
+    
     -- Load ESP module
     local espSuccess, espModule = pcall(function()
         return loadstring(game:HttpGet(baseUrl .. "prism_esp.lua"))()
@@ -99,39 +115,37 @@ local function main()
     if not espSuccess then
         notify("Prism Analytics", "Failed to load ESP module: " .. tostring(espModule), 5)
         warn("Failed to load ESP module: " .. tostring(espModule))
-        -- Continue anyway to try loading UI
     else
         notify("Prism Analytics", "ESP module loaded successfully!", 2)
-    end
-    
-    -- Load UI module
-    local uiSuccess, uiError = pcall(function()
-        loadstring(game:HttpGet(baseUrl .. "ui.lua"))()
-    end)
-    
-    if not uiSuccess then
-        notify("Prism Analytics", "Failed to load UI module: " .. tostring(uiError), 5)
-        warn("Failed to load UI module: " .. tostring(uiError))
         
-        -- Try loading the simple version as fallback
-        notify("Prism Analytics", "Trying to load simple version instead...", 3)
-        
-        local simpleSuccess, simpleError = pcall(function()
-            loadstring(game:HttpGet(baseUrl .. "prism_simple.lua"))()
+        -- Try loading UI again
+        local uiRetrySuccess, uiRetryError = pcall(function()
+            loadstring(game:HttpGet(baseUrl .. "ui.lua"))()
         end)
         
-        if not simpleSuccess then
-            notify("Prism Analytics", "Failed to load simple version: " .. tostring(simpleError), 5)
-            warn("Failed to load simple version: " .. tostring(simpleError))
+        if uiRetrySuccess then
+            notify("Prism Analytics", "Successfully loaded Prism Analytics!", 3)
             return
         else
-            notify("Prism Analytics", "Simple version loaded successfully!", 3)
+            notify("Prism Analytics", "Failed to load UI after ESP: " .. tostring(uiRetryError), 3)
+            warn("Failed to load UI after ESP: " .. tostring(uiRetryError))
         end
-    else
-        notify("Prism Analytics", "UI module loaded successfully!", 3)
     end
     
-    notify("Prism Analytics", "Successfully loaded Prism Analytics!", 3)
+    -- If all else fails, try the simple version as fallback
+    notify("Prism Analytics", "Trying to load simple version instead...", 3)
+    
+    local simpleSuccess, simpleError = pcall(function()
+        loadstring(game:HttpGet(baseUrl .. "prism_simple.lua"))()
+    end)
+    
+    if not simpleSuccess then
+        notify("Prism Analytics", "Failed to load simple version: " .. tostring(simpleError), 5)
+        warn("Failed to load simple version: " .. tostring(simpleError))
+        return
+    else
+        notify("Prism Analytics", "Simple version loaded successfully!", 3)
+    end
 end
 
 -- Run the loader with error handling
