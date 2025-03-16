@@ -5,9 +5,6 @@
     Simply execute this script to load the entire system.
 ]]
 
--- Local variables
-local success, errorMsg
-
 -- GitHub repository information
 local githubUser = "Amhim123hd"
 local repoName = "PRismWorld"
@@ -90,57 +87,49 @@ local function notify(title, text, duration)
     return screenGui
 end
 
--- Load a module from URL
-local function loadModule(name)
-    notify("Prism Analytics", "Loading " .. name .. "...", 2)
-    
-    local url = baseUrl .. name .. ".lua"
-    local success, content = pcall(function()
-        return game:HttpGet(url)
-    end)
-    
-    if not success then
-        notify("Prism Analytics", "Failed to load " .. name .. ": " .. tostring(content), 5)
-        warn("Failed to load " .. name .. ": " .. tostring(content))
-        return nil
-    end
-    
-    local loadSuccess, result = pcall(loadstring, content)
-    if not loadSuccess then
-        notify("Prism Analytics", "Failed to parse " .. name .. ": " .. tostring(result), 5)
-        warn("Failed to parse " .. name .. ": " .. tostring(result))
-        return nil
-    end
-    
-    local runSuccess, module = pcall(result)
-    if not runSuccess then
-        notify("Prism Analytics", "Failed to run " .. name .. ": " .. tostring(module), 5)
-        warn("Failed to run " .. name .. ": " .. tostring(module))
-        return nil
-    end
-    
-    return module
-end
-
--- Main loading function
+-- Main loading function with error handling
 local function main()
     notify("Prism Analytics", "Loading Prism Analytics...", 3)
     
-    -- Load ESP module first
-    local espModule = loadModule("prism_esp")
-    if not espModule then
-        notify("Prism Analytics", "Failed to load ESP module. Trying to continue...", 3)
+    -- Load ESP module
+    local espSuccess, espModule = pcall(function()
+        return loadstring(game:HttpGet(baseUrl .. "prism_esp.lua"))()
+    end)
+    
+    if not espSuccess then
+        notify("Prism Analytics", "Failed to load ESP module: " .. tostring(espModule), 5)
+        warn("Failed to load ESP module: " .. tostring(espModule))
+        -- Continue anyway to try loading UI
+    else
+        notify("Prism Analytics", "ESP module loaded successfully!", 2)
     end
     
     -- Load UI module
-    local uiModule = loadModule("ui")
-    if not uiModule then
-        notify("Prism Analytics", "Failed to load UI module. Aborting.", 5)
-        return
-    end
+    local uiSuccess, uiError = pcall(function()
+        loadstring(game:HttpGet(baseUrl .. "ui.lua"))()
+    end)
     
-    -- Initialize UI
-    local ui = uiModule()
+    if not uiSuccess then
+        notify("Prism Analytics", "Failed to load UI module: " .. tostring(uiError), 5)
+        warn("Failed to load UI module: " .. tostring(uiError))
+        
+        -- Try loading the simple version as fallback
+        notify("Prism Analytics", "Trying to load simple version instead...", 3)
+        
+        local simpleSuccess, simpleError = pcall(function()
+            loadstring(game:HttpGet(baseUrl .. "prism_simple.lua"))()
+        end)
+        
+        if not simpleSuccess then
+            notify("Prism Analytics", "Failed to load simple version: " .. tostring(simpleError), 5)
+            warn("Failed to load simple version: " .. tostring(simpleError))
+            return
+        else
+            notify("Prism Analytics", "Simple version loaded successfully!", 3)
+        end
+    else
+        notify("Prism Analytics", "UI module loaded successfully!", 3)
+    end
     
     notify("Prism Analytics", "Successfully loaded Prism Analytics!", 3)
 end
