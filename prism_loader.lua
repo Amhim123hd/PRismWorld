@@ -8,7 +8,7 @@
 -- Local variables
 local success, errorMsg
 
--- Replace these with your actual GitHub username and repository name
+-- GitHub repository information
 local githubUser = "Amhim123hd"
 local repoName = "PRismWorld"
 local branch = "main"
@@ -16,87 +16,78 @@ local branch = "main"
 -- Construct the base URL
 local baseUrl = "https://raw.githubusercontent.com/" .. githubUser .. "/" .. repoName .. "/" .. branch .. "/"
 
--- Notification function
+-- Simple notification function that works with any executor
 local function notify(title, text, duration)
-    -- Use getfenv to check for executor functions without directly referencing them
-    local env = getfenv(1)
-    local hasSynToast = pcall(function() return env["syn"] and env["syn"]["toast_notification"] end)
+    duration = duration or 5
     
-    if hasSynToast then
-        local synToast = env["syn"]["toast_notification"]
-        synToast({
-            Type = "normal",
-            Title = title,
-            Content = text,
-            Duration = duration or 5
-        })
-    else
-        -- Fallback notification
-        local screenGui = Instance.new("ScreenGui")
-        screenGui.Name = "PrismNotification"
-        
-        -- Try to use protected GUI methods
-        pcall(function()
-            local env = getfenv(1)
-            if pcall(function() return env["syn"] and env["syn"]["protect_gui"] end) then
-                local protectGui = env["syn"]["protect_gui"]
-                protectGui(screenGui)
-            end
-        end)
-        
-        -- Parent the GUI
+    -- Create GUI
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "PrismNotification"
+    
+    -- Try to parent to CoreGui
+    pcall(function()
         screenGui.Parent = game:GetService("CoreGui")
-        
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0, 300, 0, 80)
-        frame.Position = UDim2.new(0.5, -150, 0.8, -40)
-        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        frame.BorderSizePixel = 0
-        frame.BackgroundTransparency = 0.1
-        frame.Parent = screenGui
-        
-        local uiCorner = Instance.new("UICorner")
-        uiCorner.CornerRadius = UDim.new(0, 6)
-        uiCorner.Parent = frame
-        
-        local titleLabel = Instance.new("TextLabel")
-        titleLabel.Size = UDim2.new(1, -20, 0, 30)
-        titleLabel.Position = UDim2.new(0, 10, 0, 5)
-        titleLabel.BackgroundTransparency = 1
-        titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        titleLabel.TextSize = 18
-        titleLabel.Font = Enum.Font.GothamBold
-        titleLabel.Text = title
-        titleLabel.TextXAlignment = Enum.TextXAlignment.Left
-        titleLabel.Parent = frame
-        
-        local messageLabel = Instance.new("TextLabel")
-        messageLabel.Size = UDim2.new(1, -20, 0, 40)
-        messageLabel.Position = UDim2.new(0, 10, 0, 35)
-        messageLabel.BackgroundTransparency = 1
-        messageLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-        messageLabel.TextSize = 14
-        messageLabel.Font = Enum.Font.Gotham
-        messageLabel.Text = text
-        messageLabel.TextXAlignment = Enum.TextXAlignment.Left
-        messageLabel.TextWrapped = true
-        messageLabel.Parent = frame
-        
-        -- Animation
-        frame.Position = UDim2.new(0.5, -150, 1, 20)
-        local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-        local tween = game:GetService("TweenService"):Create(frame, tweenInfo, {Position = UDim2.new(0.5, -150, 0.8, -40)})
-        tween:Play()
-        
-        -- Auto remove
-        task.delay(duration or 5, function()
-            local fadeOut = game:GetService("TweenService"):Create(frame, tweenInfo, {Position = UDim2.new(0.5, -150, 1, 20)})
-            fadeOut:Play()
-            fadeOut.Completed:Connect(function()
-                screenGui:Destroy()
-            end)
+    end)
+    
+    -- If failed, try PlayerGui
+    if not screenGui.Parent then
+        pcall(function()
+            screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
         end)
     end
+    
+    -- Create frame
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 80)
+    frame.Position = UDim2.new(0.5, -150, 0.8, -40)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.BackgroundTransparency = 0.1
+    frame.Parent = screenGui
+    
+    local uiCorner = Instance.new("UICorner")
+    uiCorner.CornerRadius = UDim.new(0, 6)
+    uiCorner.Parent = frame
+    
+    local titleLabel = Instance.new("TextLabel")
+    titleLabel.Size = UDim2.new(1, -20, 0, 30)
+    titleLabel.Position = UDim2.new(0, 10, 0, 5)
+    titleLabel.BackgroundTransparency = 1
+    titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    titleLabel.TextSize = 18
+    titleLabel.Font = Enum.Font.SourceSansBold
+    titleLabel.Text = title
+    titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    titleLabel.Parent = frame
+    
+    local messageLabel = Instance.new("TextLabel")
+    messageLabel.Size = UDim2.new(1, -20, 0, 40)
+    messageLabel.Position = UDim2.new(0, 10, 0, 35)
+    messageLabel.BackgroundTransparency = 1
+    messageLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+    messageLabel.TextSize = 14
+    messageLabel.Font = Enum.Font.SourceSans
+    messageLabel.Text = text
+    messageLabel.TextXAlignment = Enum.TextXAlignment.Left
+    messageLabel.TextWrapped = true
+    messageLabel.Parent = frame
+    
+    -- Animation
+    frame.Position = UDim2.new(0.5, -150, 1, 20)
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local tween = game:GetService("TweenService"):Create(frame, tweenInfo, {Position = UDim2.new(0.5, -150, 0.8, -40)})
+    tween:Play()
+    
+    -- Auto remove
+    task.delay(duration, function()
+        local fadeOut = game:GetService("TweenService"):Create(frame, tweenInfo, {Position = UDim2.new(0.5, -150, 1, 20)})
+        fadeOut:Play()
+        fadeOut.Completed:Connect(function()
+            screenGui:Destroy()
+        end)
+    end)
+    
+    return screenGui
 end
 
 -- Load a module from URL
@@ -110,18 +101,21 @@ local function loadModule(name)
     
     if not success then
         notify("Prism Analytics", "Failed to load " .. name .. ": " .. tostring(content), 5)
+        warn("Failed to load " .. name .. ": " .. tostring(content))
         return nil
     end
     
     local loadSuccess, result = pcall(loadstring, content)
     if not loadSuccess then
         notify("Prism Analytics", "Failed to parse " .. name .. ": " .. tostring(result), 5)
+        warn("Failed to parse " .. name .. ": " .. tostring(result))
         return nil
     end
     
     local runSuccess, module = pcall(result)
     if not runSuccess then
         notify("Prism Analytics", "Failed to run " .. name .. ": " .. tostring(module), 5)
+        warn("Failed to run " .. name .. ": " .. tostring(module))
         return nil
     end
     
@@ -151,5 +145,9 @@ local function main()
     notify("Prism Analytics", "Successfully loaded Prism Analytics!", 3)
 end
 
--- Run the loader
-main()
+-- Run the loader with error handling
+local success, error = pcall(main)
+if not success then
+    warn("Prism Analytics Error: " .. tostring(error))
+    notify("Prism Analytics Error", tostring(error), 10)
+end
