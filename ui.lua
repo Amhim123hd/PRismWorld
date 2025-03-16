@@ -1,6 +1,8 @@
--- Player Panel UI
--- A dark-themed UI for displaying player information
--- Based on the Prism Analytics style
+--[[
+    Prism Analytics UI Module
+    
+    This module handles the UI for Prism Analytics.
+]]
 
 -- Services
 local Players = game:GetService("Players")
@@ -9,7 +11,29 @@ local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
 
 -- Load ESP Module
-local ESP = require(script.Parent.prism_esp)
+local ESP
+
+-- Try to load ESP module directly
+local success, result = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/Amhim123hd/PRismWorld/main/prism_esp.lua"))()
+end)
+
+if success then
+    ESP = result
+    print("Loaded ESP module from GitHub")
+else
+    warn("Failed to load ESP from GitHub: " .. tostring(result))
+    -- Try to load ESP from local require
+    pcall(function()
+        ESP = require(script.Parent.prism_esp)
+        print("Loaded ESP module from local require")
+    end)
+end
+
+-- Check if ESP module is loaded
+if not ESP then
+    error("Failed to load ESP module. Aborting.")
+end
 
 -- Variables
 local localPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
