@@ -4,6 +4,13 @@
     This module handles the UI for Prism Analytics.
 ]]
 
+-- Initialize module
+local module = {}
+
+-- UI state variables
+local uiVisible = false
+local playerPanel = nil
+
 -- Set up a safe way to access exploit-specific functionality
 local exploitFunctions = {
     protectGui = nil,
@@ -175,9 +182,6 @@ Players.PlayerRemoving:Connect(function(player)
     end
 end)
 
--- Forward declaration for functions
-local createUI, toggleUI
-
 -- Create player entry in player list
 local function createPlayerEntry(player, parent, index)
     local entryHeight = 70
@@ -250,8 +254,8 @@ local function createPlayerEntry(player, parent, index)
     return entry
 end
 
--- Create UI
-createUI = function()
+-- Define functions on the module
+module.createUI = function()
     -- Create ScreenGui
     local screenGui
     
@@ -967,23 +971,19 @@ createUI = function()
     return screenGui
 end
 
--- Toggle UI visibility with a keybind
-local uiVisible = false
-local playerPanel = nil
-
-toggleUI = function()
+module.toggleUI = function()
     if uiVisible and playerPanel then
         playerPanel:Destroy()
         playerPanel = nil
         uiVisible = false
     else
-        playerPanel = createUI()
+        playerPanel = module.createUI()
         uiVisible = true
     end
 end
 
--- Main execution
-local function main()
+-- Main initialization function
+module.init = function()
     -- Initialize
     print("Player Panel UI initialized")
     
@@ -999,16 +999,16 @@ local function main()
     -- Connect keybind (Right Shift)
     UserInputService.InputBegan:Connect(function(input, gameProcessed)
         if not gameProcessed and input.KeyCode == Enum.KeyCode.RightShift then
-            toggleUI()
+            module.toggleUI()
         end
     end)
     
     -- Initialize UI
-    toggleUI()
+    module.toggleUI()
 end
 
 -- Error handling wrapper
-local success, errorMsg = pcall(main)
+local success, errorMsg = pcall(module.init)
 if not success then
     warn("Player Panel UI Error: " .. tostring(errorMsg))
     
@@ -1081,3 +1081,5 @@ if not success then
         end)
     end
 end
+
+return module
