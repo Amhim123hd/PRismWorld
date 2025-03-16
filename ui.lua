@@ -39,38 +39,31 @@ end
 local localPlayer = Players.LocalPlayer or Players:GetPropertyChangedSignal("LocalPlayer"):Wait()
 local PlayerGui
 
--- UI Configuration
-local config = {
-    backgroundColor = Color3.fromRGB(20, 20, 20),
-    headerColor = Color3.fromRGB(15, 15, 15),
-    textColor = Color3.fromRGB(255, 255, 255),
-    accentColor = Color3.fromRGB(0, 170, 255),
-    tabColor = Color3.fromRGB(30, 30, 30),
-    tabSelectedColor = Color3.fromRGB(45, 45, 45),
-    toggleOffColor = Color3.fromRGB(50, 50, 50),
-    toggleOnColor = Color3.fromRGB(0, 170, 255),
-    fontSize = 14,
-    cornerRadius = 5,
-    panelWidth = 400,
-    panelHeight = 500,
-    animationTime = 0.3
-}
-
--- Feature settings
+-- Settings
 local settings = {
-    -- Visuals
     espEnabled = false,
     boxEsp = false,
     nameEsp = false,
     healthEsp = false,
     chamsEnabled = false,
-    
-    -- Aimbot
+    teamCheck = true,
     aimbotEnabled = false,
-    aimbotKey = "E",
-    smoothness = 5,
+    aimbotKey = Enum.KeyCode.E,
+    smoothness = 0.5,
     fov = 100,
-    aimbotTargetPart = "Head"
+    targetPart = "Head"
+}
+
+-- UI Configuration
+local config = {
+    backgroundColor = Color3.fromRGB(25, 25, 25),
+    secondaryColor = Color3.fromRGB(35, 35, 35),
+    accentColor = Color3.fromRGB(0, 170, 255),
+    textColor = Color3.fromRGB(255, 255, 255),
+    fontSize = 14,
+    toggleOnColor = Color3.fromRGB(0, 170, 255),
+    toggleOffColor = Color3.fromRGB(100, 100, 100),
+    cornerRadius = UDim.new(0, 5)
 }
 
 -- Forward declaration for functions
@@ -100,7 +93,7 @@ createPlayerEntry = function(player, parent, index)
     entry.Parent = parent
     
     local entryCorner = Instance.new("UICorner")
-    entryCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    entryCorner.CornerRadius = config.cornerRadius
     entryCorner.Parent = entry
     
     -- Create player avatar
@@ -272,8 +265,8 @@ createUI = function()
     -- Create main frame
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, config.panelWidth, 0, config.panelHeight)
-    mainFrame.Position = UDim2.new(0.5, -config.panelWidth/2, 0.5, -config.panelHeight/2)
+    mainFrame.Size = UDim2.new(0, 400, 0, 500)
+    mainFrame.Position = UDim2.new(0.5, -200, 0.5, -250)
     mainFrame.BackgroundColor3 = config.backgroundColor
     mainFrame.BorderSizePixel = 0
     mainFrame.Active = true
@@ -282,7 +275,7 @@ createUI = function()
     
     -- Add corner radius
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, config.cornerRadius)
+    corner.CornerRadius = config.cornerRadius
     corner.Parent = mainFrame
     
     -- Create title bar
@@ -290,7 +283,7 @@ createUI = function()
     titleBar.Name = "TitleBar"
     titleBar.Size = UDim2.new(1, 0, 0, 30)
     titleBar.Position = UDim2.new(0, 0, 0, 0)
-    titleBar.BackgroundColor3 = config.headerColor
+    titleBar.BackgroundColor3 = config.secondaryColor
     titleBar.BorderSizePixel = 0
     titleBar.Parent = mainFrame
     
@@ -348,7 +341,7 @@ createUI = function()
     tabBar.Name = "TabBar"
     tabBar.Size = UDim2.new(1, 0, 0, 30)
     tabBar.Position = UDim2.new(0, 0, 0, 30)
-    tabBar.BackgroundColor3 = config.tabColor
+    tabBar.BackgroundColor3 = config.secondaryColor
     tabBar.BorderSizePixel = 0
     tabBar.Parent = mainFrame
     
@@ -372,7 +365,7 @@ createUI = function()
         tabButton.Name = tabName .. "Button"
         tabButton.Size = UDim2.new(1/#tabNames, 0, 1, 0)
         tabButton.Position = UDim2.new((i-1)/#tabNames, 0, 0, 0)
-        tabButton.BackgroundColor3 = config.tabColor
+        tabButton.BackgroundColor3 = config.secondaryColor
         tabButton.BorderSizePixel = 0
         tabButton.Font = Enum.Font.Gotham
         tabButton.Text = tabName
@@ -396,7 +389,7 @@ createUI = function()
     -- Create visuals tab content
     local visualsTab = tabContent[1]
     visualsTab.Visible = true -- Make this tab visible by default
-    tabButtons[1].BackgroundColor3 = config.tabSelectedColor -- Select this tab by default
+    tabButtons[1].BackgroundColor3 = config.accentColor -- Select this tab by default
     
     -- Create a scrolling frame for the visuals tab
     local visualsScroll = Instance.new("ScrollingFrame")
@@ -428,12 +421,12 @@ createUI = function()
     espToggle.Name = "ESPToggle"
     espToggle.Size = UDim2.new(1, -20, 0, 30)
     espToggle.Position = UDim2.new(0, 10, 0, 50)
-    espToggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    espToggle.BackgroundColor3 = config.secondaryColor
     espToggle.BorderSizePixel = 0
     espToggle.Parent = visualsScroll
     
     local espToggleCorner = Instance.new("UICorner")
-    espToggleCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    espToggleCorner.CornerRadius = config.cornerRadius
     espToggleCorner.Parent = espToggle
     
     local espToggleLabel = Instance.new("TextLabel")
@@ -478,12 +471,12 @@ createUI = function()
     boxEspToggle.Name = "BoxESPToggle"
     boxEspToggle.Size = UDim2.new(1, -20, 0, 30)
     boxEspToggle.Position = UDim2.new(0, 10, 0, 90)
-    boxEspToggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    boxEspToggle.BackgroundColor3 = config.secondaryColor
     boxEspToggle.BorderSizePixel = 0
     boxEspToggle.Parent = visualsScroll
     
     local boxEspToggleCorner = Instance.new("UICorner")
-    boxEspToggleCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    boxEspToggleCorner.CornerRadius = config.cornerRadius
     boxEspToggleCorner.Parent = boxEspToggle
     
     local boxEspToggleLabel = Instance.new("TextLabel")
@@ -528,12 +521,12 @@ createUI = function()
     nameEspToggle.Name = "NameESPToggle"
     nameEspToggle.Size = UDim2.new(1, -20, 0, 30)
     nameEspToggle.Position = UDim2.new(0, 10, 0, 130)
-    nameEspToggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    nameEspToggle.BackgroundColor3 = config.secondaryColor
     nameEspToggle.BorderSizePixel = 0
     nameEspToggle.Parent = visualsScroll
     
     local nameEspToggleCorner = Instance.new("UICorner")
-    nameEspToggleCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    nameEspToggleCorner.CornerRadius = config.cornerRadius
     nameEspToggleCorner.Parent = nameEspToggle
     
     local nameEspToggleLabel = Instance.new("TextLabel")
@@ -578,12 +571,12 @@ createUI = function()
     healthEspToggle.Name = "HealthESPToggle"
     healthEspToggle.Size = UDim2.new(1, -20, 0, 30)
     healthEspToggle.Position = UDim2.new(0, 10, 0, 170)
-    healthEspToggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    healthEspToggle.BackgroundColor3 = config.secondaryColor
     healthEspToggle.BorderSizePixel = 0
     healthEspToggle.Parent = visualsScroll
     
     local healthEspToggleCorner = Instance.new("UICorner")
-    healthEspToggleCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    healthEspToggleCorner.CornerRadius = config.cornerRadius
     healthEspToggleCorner.Parent = healthEspToggle
     
     local healthEspToggleLabel = Instance.new("TextLabel")
@@ -628,12 +621,12 @@ createUI = function()
     chamsToggle.Name = "ChamsToggle"
     chamsToggle.Size = UDim2.new(1, -20, 0, 30)
     chamsToggle.Position = UDim2.new(0, 10, 0, 210)
-    chamsToggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    chamsToggle.BackgroundColor3 = config.secondaryColor
     chamsToggle.BorderSizePixel = 0
     chamsToggle.Parent = visualsScroll
     
     local chamsToggleCorner = Instance.new("UICorner")
-    chamsToggleCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    chamsToggleCorner.CornerRadius = config.cornerRadius
     chamsToggleCorner.Parent = chamsToggle
     
     local chamsToggleLabel = Instance.new("TextLabel")
@@ -706,12 +699,12 @@ createUI = function()
     aimbotToggle.Name = "AimbotToggle"
     aimbotToggle.Size = UDim2.new(1, -20, 0, 30)
     aimbotToggle.Position = UDim2.new(0, 10, 0, 50)
-    aimbotToggle.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    aimbotToggle.BackgroundColor3 = config.secondaryColor
     aimbotToggle.BorderSizePixel = 0
     aimbotToggle.Parent = aimbotScroll
     
     local aimbotToggleCorner = Instance.new("UICorner")
-    aimbotToggleCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    aimbotToggleCorner.CornerRadius = config.cornerRadius
     aimbotToggleCorner.Parent = aimbotToggle
     
     local aimbotToggleLabel = Instance.new("TextLabel")
@@ -756,12 +749,12 @@ createUI = function()
     aimbotKeyFrame.Name = "AimbotKeyFrame"
     aimbotKeyFrame.Size = UDim2.new(1, -20, 0, 30)
     aimbotKeyFrame.Position = UDim2.new(0, 10, 0, 90)
-    aimbotKeyFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    aimbotKeyFrame.BackgroundColor3 = config.secondaryColor
     aimbotKeyFrame.BorderSizePixel = 0
     aimbotKeyFrame.Parent = aimbotScroll
     
     local aimbotKeyFrameCorner = Instance.new("UICorner")
-    aimbotKeyFrameCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    aimbotKeyFrameCorner.CornerRadius = config.cornerRadius
     aimbotKeyFrameCorner.Parent = aimbotKeyFrame
     
     local aimbotKeyLabel = Instance.new("TextLabel")
@@ -783,13 +776,13 @@ createUI = function()
     aimbotKeyButton.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
     aimbotKeyButton.BorderSizePixel = 0
     aimbotKeyButton.Font = Enum.Font.Gotham
-    aimbotKeyButton.Text = settings.aimbotKey or "E"
+    aimbotKeyButton.Text = settings.aimbotKey.Name
     aimbotKeyButton.TextColor3 = config.textColor
     aimbotKeyButton.TextSize = config.fontSize
     aimbotKeyButton.Parent = aimbotKeyFrame
     
     local aimbotKeyButtonCorner = Instance.new("UICorner")
-    aimbotKeyButtonCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    aimbotKeyButtonCorner.CornerRadius = config.cornerRadius
     aimbotKeyButtonCorner.Parent = aimbotKeyButton
     
     -- Aimbot Smoothness Setting
@@ -797,12 +790,12 @@ createUI = function()
     smoothnessFrame.Name = "SmoothnessFrame"
     smoothnessFrame.Size = UDim2.new(1, -20, 0, 60)
     smoothnessFrame.Position = UDim2.new(0, 10, 0, 130)
-    smoothnessFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    smoothnessFrame.BackgroundColor3 = config.secondaryColor
     smoothnessFrame.BorderSizePixel = 0
     smoothnessFrame.Parent = aimbotScroll
     
     local smoothnessFrameCorner = Instance.new("UICorner")
-    smoothnessFrameCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    smoothnessFrameCorner.CornerRadius = config.cornerRadius
     smoothnessFrameCorner.Parent = smoothnessFrame
     
     local smoothnessLabel = Instance.new("TextLabel")
@@ -811,7 +804,7 @@ createUI = function()
     smoothnessLabel.Position = UDim2.new(0, 10, 0, 5)
     smoothnessLabel.BackgroundTransparency = 1
     smoothnessLabel.Font = Enum.Font.Gotham
-    smoothnessLabel.Text = "Smoothness: " .. (settings.smoothness or "5")
+    smoothnessLabel.Text = "Smoothness: " .. tostring(settings.smoothness)
     smoothnessLabel.TextColor3 = config.textColor
     smoothnessLabel.TextSize = config.fontSize
     smoothnessLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -832,7 +825,7 @@ createUI = function()
     local smoothnessKnob = Instance.new("TextButton")
     smoothnessKnob.Name = "Knob"
     smoothnessKnob.Size = UDim2.new(0, 15, 0, 15)
-    smoothnessKnob.Position = UDim2.new((settings.smoothness or 5) / 10, -7.5, 0.5, -7.5)
+    smoothnessKnob.Position = UDim2.new(settings.smoothness, -7.5, 0.5, -7.5)
     smoothnessKnob.BackgroundColor3 = config.accentColor
     smoothnessKnob.BorderSizePixel = 0
     smoothnessKnob.Text = ""
@@ -847,12 +840,12 @@ createUI = function()
     fovFrame.Name = "FOVFrame"
     fovFrame.Size = UDim2.new(1, -20, 0, 60)
     fovFrame.Position = UDim2.new(0, 10, 0, 200)
-    fovFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    fovFrame.BackgroundColor3 = config.secondaryColor
     fovFrame.BorderSizePixel = 0
     fovFrame.Parent = aimbotScroll
     
     local fovFrameCorner = Instance.new("UICorner")
-    fovFrameCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+    fovFrameCorner.CornerRadius = config.cornerRadius
     fovFrameCorner.Parent = fovFrame
     
     local fovLabel = Instance.new("TextLabel")
@@ -861,7 +854,7 @@ createUI = function()
     fovLabel.Position = UDim2.new(0, 10, 0, 5)
     fovLabel.BackgroundTransparency = 1
     fovLabel.Font = Enum.Font.Gotham
-    fovLabel.Text = "FOV: " .. (settings.fov or "100")
+    fovLabel.Text = "FOV: " .. tostring(settings.fov)
     fovLabel.TextColor3 = config.textColor
     fovLabel.TextSize = config.fontSize
     fovLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -882,7 +875,7 @@ createUI = function()
     local fovKnob = Instance.new("TextButton")
     fovKnob.Name = "Knob"
     fovKnob.Size = UDim2.new(0, 15, 0, 15)
-    fovKnob.Position = UDim2.new((settings.fov or 100) / 200, -7.5, 0.5, -7.5)
+    fovKnob.Position = UDim2.new(settings.fov / 200, -7.5, 0.5, -7.5)
     fovKnob.BackgroundColor3 = config.accentColor
     fovKnob.BorderSizePixel = 0
     fovKnob.Text = ""
@@ -945,12 +938,12 @@ createUI = function()
                 playerEntry.Name = player.Name .. "Entry"
                 playerEntry.Size = UDim2.new(1, 0, 0, 60)
                 playerEntry.Position = UDim2.new(0, 0, 0, yOffset)
-                playerEntry.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+                playerEntry.BackgroundColor3 = config.secondaryColor
                 playerEntry.BorderSizePixel = 0
                 playerEntry.Parent = playerListFrame
                 
                 local playerEntryCorner = Instance.new("UICorner")
-                playerEntryCorner.CornerRadius = UDim.new(0, config.cornerRadius)
+                playerEntryCorner.CornerRadius = config.cornerRadius
                 playerEntryCorner.Parent = playerEntry
                 
                 local playerName = Instance.new("TextLabel")
@@ -1028,8 +1021,8 @@ createUI = function()
         if mainFrame.Size.Y.Offset > 60 then
             -- Minimize
             local tween = TweenService:Create(mainFrame, 
-                TweenInfo.new(config.animationTime, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-                {Size = UDim2.new(0, config.panelWidth, 0, 30)}
+                TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, 400, 0, 30)}
             )
             tween:Play()
             tabContentArea.Visible = false
@@ -1037,8 +1030,8 @@ createUI = function()
         else
             -- Restore
             local tween = TweenService:Create(mainFrame, 
-                TweenInfo.new(config.animationTime, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-                {Size = UDim2.new(0, config.panelWidth, 0, config.panelHeight)}
+                TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, 400, 0, 500)}
             )
             tween:Play()
             tabContentArea.Visible = true
@@ -1052,12 +1045,12 @@ createUI = function()
             -- Hide all content
             for j, content in ipairs(tabContent) do
                 content.Visible = false
-                tabButtons[j].BackgroundColor3 = config.tabColor
+                tabButtons[j].BackgroundColor3 = config.secondaryColor
             end
             
             -- Show selected tab
             tabContent[i].Visible = true
-            button.BackgroundColor3 = config.tabSelectedColor
+            button.BackgroundColor3 = config.accentColor
         end)
     end
     
@@ -1155,7 +1148,7 @@ createUI = function()
         local connection
         connection = UserInputService.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.Keyboard then
-                settings.aimbotKey = input.KeyCode.Name
+                settings.aimbotKey = input.KeyCode
                 aimbotKeyButton.Text = input.KeyCode.Name
                 keyChanging = false
                 connection:Disconnect()
@@ -1185,10 +1178,8 @@ createUI = function()
             local relativeX = math.clamp((mousePos.X - sliderPos.X) / sliderSize.X, 0, 1)
             smoothnessKnob.Position = UDim2.new(relativeX, -7.5, 0.5, -7.5)
             
-            local smoothnessValue = math.floor(relativeX * 10)
-            if smoothnessValue < 1 then smoothnessValue = 1 end
-            settings.smoothness = smoothnessValue
-            smoothnessLabel.Text = "Smoothness: " .. smoothnessValue
+            settings.smoothness = relativeX
+            smoothnessLabel.Text = "Smoothness: " .. tostring(settings.smoothness)
         end
     end)
     
@@ -1214,10 +1205,8 @@ createUI = function()
             local relativeX = math.clamp((mousePos.X - sliderPos.X) / sliderSize.X, 0, 1)
             fovKnob.Position = UDim2.new(relativeX, -7.5, 0.5, -7.5)
             
-            local fovValue = math.floor(relativeX * 200)
-            if fovValue < 10 then fovValue = 10 end
-            settings.fov = fovValue
-            fovLabel.Text = "FOV: " .. fovValue
+            settings.fov = math.floor(relativeX * 200)
+            fovLabel.Text = "FOV: " .. tostring(settings.fov)
         end
     end)
     
