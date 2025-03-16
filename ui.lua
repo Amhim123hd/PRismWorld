@@ -46,6 +46,11 @@ local settings = {
     nameEsp = false,
     healthEsp = false,
     chamsEnabled = false,
+    highlightEnabled = false,  
+    highlightFillColor = Color3.fromRGB(255, 0, 4),
+    highlightOutlineColor = Color3.fromRGB(255, 255, 255),
+    highlightFillTransparency = 0.5,
+    highlightOutlineTransparency = 0,
     teamCheck = true,
     aimbotEnabled = false,
     aimbotKey = Enum.KeyCode.E,
@@ -616,11 +621,61 @@ createUI = function()
     healthEspToggleCircleCorner.CornerRadius = UDim.new(1, 0)
     healthEspToggleCircleCorner.Parent = healthEspToggleCircle
     
+    -- Highlight ESP toggle
+    local highlightEspToggle = Instance.new("Frame")
+    highlightEspToggle.Name = "HighlightESPToggle"
+    highlightEspToggle.Size = UDim2.new(1, -20, 0, 30)
+    highlightEspToggle.Position = UDim2.new(0, 10, 0, 210)
+    highlightEspToggle.BackgroundColor3 = config.secondaryColor
+    highlightEspToggle.BorderSizePixel = 0
+    highlightEspToggle.Parent = visualsScroll
+    
+    local highlightEspToggleCorner = Instance.new("UICorner")
+    highlightEspToggleCorner.CornerRadius = config.cornerRadius
+    highlightEspToggleCorner.Parent = highlightEspToggle
+    
+    local highlightEspToggleLabel = Instance.new("TextLabel")
+    highlightEspToggleLabel.Name = "Label"
+    highlightEspToggleLabel.Size = UDim2.new(1, -60, 1, 0)
+    highlightEspToggleLabel.Position = UDim2.new(0, 10, 0, 0)
+    highlightEspToggleLabel.BackgroundTransparency = 1
+    highlightEspToggleLabel.Font = Enum.Font.Gotham
+    highlightEspToggleLabel.Text = "Highlight ESP"
+    highlightEspToggleLabel.TextColor3 = config.textColor
+    highlightEspToggleLabel.TextSize = config.fontSize
+    highlightEspToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+    highlightEspToggleLabel.Parent = highlightEspToggle
+    
+    local highlightEspToggleButton = Instance.new("TextButton")
+    highlightEspToggleButton.Name = "Button"
+    highlightEspToggleButton.Size = UDim2.new(0, 40, 0, 20)
+    highlightEspToggleButton.Position = UDim2.new(1, -50, 0.5, -10)
+    highlightEspToggleButton.BackgroundColor3 = settings.highlightEnabled and config.toggleOnColor or config.toggleOffColor
+    highlightEspToggleButton.BorderSizePixel = 0
+    highlightEspToggleButton.Text = ""
+    highlightEspToggleButton.Parent = highlightEspToggle
+    
+    local highlightEspToggleButtonCorner = Instance.new("UICorner")
+    highlightEspToggleButtonCorner.CornerRadius = UDim.new(1, 0)
+    highlightEspToggleButtonCorner.Parent = highlightEspToggleButton
+    
+    local highlightEspToggleCircle = Instance.new("Frame")
+    highlightEspToggleCircle.Name = "Circle"
+    highlightEspToggleCircle.Size = UDim2.new(0, 16, 0, 16)
+    highlightEspToggleCircle.Position = settings.highlightEnabled and UDim2.new(1, -18, 0.5, -8) or UDim2.new(0, 2, 0.5, -8)
+    highlightEspToggleCircle.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    highlightEspToggleCircle.BorderSizePixel = 0
+    highlightEspToggleCircle.Parent = highlightEspToggleButton
+    
+    local highlightEspToggleCircleCorner = Instance.new("UICorner")
+    highlightEspToggleCircleCorner.CornerRadius = UDim.new(1, 0)
+    highlightEspToggleCircleCorner.Parent = highlightEspToggleCircle
+    
     -- Chams toggle
     local chamsToggle = Instance.new("Frame")
     chamsToggle.Name = "ChamsToggle"
     chamsToggle.Size = UDim2.new(1, -20, 0, 30)
-    chamsToggle.Position = UDim2.new(0, 10, 0, 210)
+    chamsToggle.Position = UDim2.new(0, 10, 0, 250)
     chamsToggle.BackgroundColor3 = config.secondaryColor
     chamsToggle.BorderSizePixel = 0
     chamsToggle.Parent = visualsScroll
@@ -1125,6 +1180,20 @@ createUI = function()
         end
     end)
     
+    highlightEspToggleButton.MouseButton1Click:Connect(function()
+        if settings.highlightEnabled then
+            settings.highlightEnabled = false
+            highlightEspToggleButton.BackgroundColor3 = config.toggleOffColor
+            highlightEspToggleCircle.Position = UDim2.new(0, 2, 0.5, -8)
+            ESP:ToggleHighlightESP(false)
+        else
+            settings.highlightEnabled = true
+            highlightEspToggleButton.BackgroundColor3 = config.toggleOnColor
+            highlightEspToggleCircle.Position = UDim2.new(1, -18, 0.5, -8)
+            ESP:ToggleHighlightESP(true)
+        end
+    end)
+    
     aimbotToggleButton.MouseButton1Click:Connect(function()
         if settings.aimbotEnabled then
             settings.aimbotEnabled = false
@@ -1227,9 +1296,81 @@ createUI = function()
     ESP:ToggleNameESP(settings.nameEsp)
     ESP:ToggleHealthESP(settings.healthEsp)
     ESP:ToggleChams(settings.chamsEnabled)
+    ESP:ToggleHighlightESP(settings.highlightEnabled)
     
     return screenGui
 end
+
+-- Highlight ESP functionality
+local highlightInstances = {}
+
+local function applyHighlight(player)
+    -- Skip local player if team check is enabled
+    if settings.teamCheck and player == localPlayer then
+        return
+    end
+    
+    local function onCharacterAdded(character)
+        -- Remove existing highlight if it exists
+        if highlightInstances[player.Name] then
+            pcall(function() highlightInstances[player.Name]:Destroy() end)
+        end
+        
+        -- Create a new Highlight instance and set properties
+        local highlight = Instance.new("Highlight")
+        highlight.Archivable = true
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Ensures highlight is always visible
+        highlight.Enabled = settings.highlightEnabled
+        highlight.FillColor = settings.highlightFillColor
+        highlight.OutlineColor = settings.highlightOutlineColor
+        highlight.FillTransparency = settings.highlightFillTransparency
+        highlight.OutlineTransparency = settings.highlightOutlineTransparency
+        highlight.Parent = character
+        
+        highlightInstances[player.Name] = highlight
+    end
+    
+    -- If the player's character already exists, apply the highlight
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+    
+    -- Connect to CharacterAdded to ensure highlight is added when character respawns
+    player.CharacterAdded:Connect(onCharacterAdded)
+end
+
+local function toggleHighlightESP(enabled)
+    settings.highlightEnabled = enabled
+    
+    -- Update all existing highlights
+    for playerName, highlight in pairs(highlightInstances) do
+        pcall(function() highlight.Enabled = enabled end)
+    end
+    
+    -- If enabled, make sure all players have highlights
+    if enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= localPlayer or not settings.teamCheck then
+                applyHighlight(player)
+            end
+        end
+    end
+end
+
+-- Listen for new players joining
+Players.PlayerAdded:Connect(function(player)
+    if settings.highlightEnabled then
+        applyHighlight(player)
+    end
+end)
+
+-- Listen for players leaving
+Players.PlayerRemoving:Connect(function(player)
+    if highlightInstances[player.Name] then
+        pcall(function() highlightInstances[player.Name]:Destroy() end)
+        highlightInstances[player.Name] = nil
+    end
+end)
 
 -- Toggle UI visibility with a keybind
 local uiVisible = false
