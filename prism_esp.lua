@@ -18,6 +18,7 @@ ESP.Settings = {
     NameEsp = false,
     HealthEsp = false,
     ChamsEnabled = false,
+    HighlightEnabled = false,
     TeamCheck = false,
     MaxDistance = 1000,
     BoxColor = Color3.fromRGB(255, 0, 0),
@@ -25,12 +26,17 @@ ESP.Settings = {
     HealthColor = Color3.fromRGB(0, 255, 0),
     ChamsColor = Color3.fromRGB(255, 0, 0),
     ChamsTransparency = 0.5,
+    HighlightFillColor = Color3.fromRGB(255, 0, 4),
+    HighlightOutlineColor = Color3.fromRGB(255, 255, 255),
+    HighlightFillTransparency = 0.5,
+    HighlightOutlineTransparency = 0,
     TextSize = 14
 }
 
 -- Initialize ESP containers
 ESP.PlayerESP = {}
 ESP.Connections = {}
+ESP.HighlightInstances = {}
 
 -- Utility Functions
 local function createDrawing(type, properties)
@@ -287,6 +293,18 @@ function ESP:UpdatePlayerESP(player)
         espData.Chams.Enabled = false
         espData.Chams.Parent = nil
     end
+    
+    -- Update Highlight
+    if ESP.Settings.HighlightEnabled then
+        if not self.HighlightInstances[player.Name] then
+            self:ApplyHighlight(player)
+        end
+    else
+        if self.HighlightInstances[player.Name] then
+            self.HighlightInstances[player.Name]:Destroy()
+            self.HighlightInstances[player.Name] = nil
+        end
+    end
 end
 
 -- Hide ESP for a player
@@ -332,6 +350,69 @@ function ESP:RemovePlayerESP(player)
     end
     
     self.PlayerESP[player] = nil
+    
+    -- Clean up highlight
+    if self.HighlightInstances[player.Name] then
+        self.HighlightInstances[player.Name]:Destroy()
+        self.HighlightInstances[player.Name] = nil
+    end
+end
+
+-- Apply highlight to a player
+function ESP:ApplyHighlight(player)
+    -- Skip local player if team check is enabled
+    if self.Settings.TeamCheck and player == localPlayer then
+        return
+    end
+    
+    local function onCharacterAdded(character)
+        -- Remove existing highlight if it exists
+        if self.HighlightInstances[player.Name] then
+            self.HighlightInstances[player.Name]:Destroy()
+        end
+        
+        -- Create a new Highlight instance and set properties
+        local highlight = Instance.new("Highlight")
+        highlight.Archivable = true
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop -- Ensures highlight is always visible
+        highlight.Enabled = self.Settings.HighlightEnabled
+        highlight.FillColor = self.Settings.HighlightFillColor
+        highlight.OutlineColor = self.Settings.HighlightOutlineColor
+        highlight.FillTransparency = self.Settings.HighlightFillTransparency
+        highlight.OutlineTransparency = self.Settings.HighlightOutlineTransparency
+        highlight.Parent = character
+        
+        self.HighlightInstances[player.Name] = highlight
+    end
+    
+    -- If the player's character already exists, apply the highlight
+    if player.Character then
+        onCharacterAdded(player.Character)
+    end
+    
+    -- Connect to CharacterAdded to ensure highlight is added when character respawns
+    if not self.Connections[player.Name .. "_CharacterAdded"] then
+        self.Connections[player.Name .. "_CharacterAdded"] = player.CharacterAdded:Connect(onCharacterAdded)
+    end
+end
+
+-- Toggle highlight ESP
+function ESP:ToggleHighlightESP(enabled)
+    self.Settings.HighlightEnabled = enabled
+    
+    -- Update all existing highlights
+    for playerName, highlight in pairs(self.HighlightInstances) do
+        pcall(function() highlight.Enabled = enabled end)
+    end
+    
+    -- If enabled, make sure all players have highlights
+    if enabled then
+        for _, player in pairs(Players:GetPlayers()) do
+            if player ~= localPlayer or not self.Settings.TeamCheck then
+                self:ApplyHighlight(player)
+            end
+        end
+    end
 end
 
 -- Initialize the ESP system
@@ -445,6 +526,7 @@ function ESP:Destroy()
     
     self.PlayerESP = {}
     self.Connections = {}
+    self.HighlightInstances = {}
 end
 
 return ESP
